@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Replace with your XBackbone ShareX server URL and upload endpoint
+server_url="https://example.com/upload"
+auth_token="<token here>"
+
+# Take a screenshot using Flameshot and save it to a temporary file
+screenshot_file=$(mktemp).png
+flameshot gui -r > "$screenshot_file"
+
+# Check if the screenshot was aborted (file not created or empty)
+if [ ! -s "$screenshot_file" ]; then
+    notify-send "Screenshot aborted."
+    rm "$screenshot_file"
+    exit 1
+fi
+
+# Upload the screenshot to the ShareX server using curl and parse the JSON response using jq
+response=$(curl -s -F "token=$auth_token" -F "upload=@$screenshot_file" "$server_url")
+status=$(echo "$response" | jq -r '.message')
+url=$(echo "$response" | jq -r '.url')
+
+# Check the response status and take action accordingly
+if [ "$status" == "OK" ]; then
+    # Copy the uploaded URL to the clipboard using xclip
+    echo "$url" | xclip -selection clipboard
+
+    # Show a notification with the uploaded URL
+    notify-send "Upload completed!" "$url"
+    rm "$screenshot_file"
+    exit 0
+else
+    if [ -z "$status" ]; then
+        echo "Unexpected response:"
+        echo "$response"
+    else
+        if [ -n "$DESKTOP_SESSION" ]; then
+            notify-send "Error!" "$status"
+        else
+            echo "Error! $status"
+        fi
+    fi
+    rm "$screenshot_file"
+    exit 1
+fi
